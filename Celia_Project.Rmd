@@ -1,0 +1,256 @@
+---
+title: "Project"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2023-11-18"
+---
+
+### Read in data
+
+```{r warning=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(pROC)
+library(modelr)
+
+
+
+
+```
+
+
+These first few exercises will run through some of the simple principles of creating a ggplot2 object, assigning aesthetics mappings and geoms.
+
+1.  Read in the healthcare-dataset-stroke-data ,into a
+   new object called `stroke' with function read.csv
+
+```{r message = FALSE, warning = FALSE}
+
+setwd("/Users/celiabuiano/Downloads/OA Final Project")
+stroke <- read.csv("healthcare-dataset-stroke-data.csv")
+
+
+```
+
+### Splitting the data
+
+2. Split your data into training dataset and testing dataset using the ratio 80:20
+
+```{r}
+dmds <- resample_partition(stroke,c(train=0.8, test=0.2))
+train_reg <- as_tibble(dmds$train)
+test_reg <- as_tibble(dmds$test)
+
+```
+
+### Plotting all other variables using the training dataset
+
+3.  Plot stroke v.s. all other variables (except id), which means you would generate 10 plots totally
+(use the golden rules)
+
+```{r}
+ggplot(stroke, aes(x=gender, group = stroke, fill = stroke))+
+  geom_bar(position = "dodge")
+
+ggplot(stroke, aes(x=stroke,age, group=stroke))+
+  geom_boxplot()
+
+ggplot(stroke, aes(x=hypertension, group=stroke, fill = stroke))+
+  geom_bar(position="stack")
+
+ggplot(stroke, aes(x=heart_disease, group=stroke, fill = stroke))+
+  geom_bar(position="stack")
+
+ggplot(stroke, aes(x=ever_married, group=stroke, fill = stroke))+
+  geom_bar(position="dodge")
+
+
+ggplot(stroke, aes(x=work_type, group=stroke, fill = stroke))+
+  geom_bar(position="dodge")
+
+
+ggplot(stroke, aes(x=Residence_type, group=stroke, fill = stroke))+
+  geom_bar(position="dodge")
+
+ggplot(stroke, aes(stroke,avg_glucose_level, group=stroke))+
+  geom_boxplot()
+
+
+ggplot(stroke, aes(stroke,as.numeric(bmi), group=stroke))+
+  geom_boxplot()
+
+ggplot(stroke, aes(x=smoking_status, group=stroke, fill = stroke))+
+  geom_bar(position="dodge")
+
+
+
+```
+
+### Manually select variables and train the models
+
+4. Pick some variables as your independent variables (it could be from 2 ~ 10), and explain why you need to pick them. Then train a logistic regression using this variables, report the significant variables and the ROC on testing set.
+
+```{r }
+
+
+fit_age <- glm(stroke~age, data = train_reg, family = "binomial")
+summary(fit_age)
+fit_gluc <- glm(stroke~avg_glucose_level, data = train_reg, family = "binomial")
+summary(fit_gluc)
+
+test_reg_age <- test_reg %>% 
+  add_predictions(fit_age, "lpred") %>% 
+  mutate(prob=exp(lpred)/(1+exp(lpred)))
+test_reg_gluc <- test_reg %>% 
+  add_predictions(fit_gluc, "lpred") %>% 
+  mutate(prob=exp(lpred)/(1+exp(lpred)))
+
+
+roc_age <- roc(test_reg$stroke, test_reg_age$prob)
+roc_gluc <- roc(test_reg$stroke, test_reg_gluc$prob)
+
+auc_age <- auc(roc_age)
+auc_gluc <- auc(roc_gluc)
+
+auc_age
+auc_gluc
+
+
+```
+
+I have chosen to assess the statistical significance of the variables 'age' and 'average glucose levels' in relation to the occurrence of stroke. I chose these variables based on the plots above.  
+
+The boxplot illustrating the relationship between average glucose levels and stroke reveals notable patterns. The Interquartile Range is remarkably large for individuals who experienced a stroke, indicating significant variability in their glucose levels. The median for individuals with a stroke is notably higher compared to those without, suggesting a potential association between elevated glucose levels and stroke occurrence. Additionally, the presence of outliers in the group with a stroke suggests the existence of individuals with exceptionally high glucose levels. This finding underscores the importance of investigating outliers, particularly among individuals without a stroke, as these extreme values could potentially exert influence on a logistic regression model. Overall, the larger IQR and higher median for average glucose levels in individuals with a stroke imply substantial variability and a potential relationship with the occurrence of strokes.
+
+The boxplot portraying the relationship between age and stroke presents distinct characteristics. Notably, there are lower outliers among individuals who experienced a stroke, indicating the presence of individuals with exceptionally low ages in this group. Moreover, the median age for individuals with a stroke is substantially larger in comparison to those without, signifying a significant difference in central tendency between the two groups. Additionally, the interquartile range for individuals with a stroke shows that their first quartile aligns with the third quartile of those without a stroke. The variation in quartiles highlights the age difference between the two groups, emphasizing a possible connection between age and stroke occurrences.
+
+
+Both models are predicting stroke probability based on age and average glucose levels.
+
+The coefficients tells us how much the log-odds of stroke change with each unit increase in the predictor.
+
+Significance codes help determine if predictors are statistically significant.
+
+The log-odds of having a stroke when average glucose level is zero is approximately -4.16.
+For each one-unit increase in glucose level, the log-odds of having a stroke increase by 0.00994. 
+The p-value for this predictor is very small, indicating it's a significant predictor for stroke.
+
+The log-odds of having a stroke when the age is zero is approximately -7.03. For each one-year increase in age, the log-odds of having a stroke increase by 0.0715. The p-value for age is extremely small, which tells us it is a highly significant predictor of stroke.
+
+In summary, both models indicate significant relationships between predictors and the likelihood of stroke, which is exactly what we see from the plots above. 
+
+Age and average glucose levels are positively associated with the log-odds of having a stroke. 
+
+
+Area Under the Curve:
+AUC ranges from 0 to 1, where 0.5 indicates no discriminatory ability. Higher AUC values suggests better discriminatory ability. 
+
+Discriminatory ability refers to the model's capability to effectively distinguish between 
+positive and negative outcomes. 
+
+The AUC for the age model is 0.8589. This outcome, being very close to 1, indicates the age model has good discriminatory ability.
+
+The AUC for the glucose model is also close to 1, being 0.6264, which tells us that the discriminatory ability of the glucose model is also very good. 
+
+
+
+
+
+
+### Use feature selection to determine the significant variables
+
+5. Instead of picking the variables by eyeballing, use feature selection to determine the variables you will use in the logistic regression. Pick one of the following options:
+
+  A.Put all the variables from 'stroke' into the stepwise selection, report the significant variables
+  
+  B.[Hard one] Expand your 'stroke' by transforming your existing variables into more variables (e.g. square all the numeric variables;find the interaction term between each variables),then put all the variables (original variables  plus the new variables you create) from 'stroke' into the stepwise selection, report the significant variables
+
+```{r message = FALSE}
+library(leaps)
+library(MASS)
+all.mod <- lm(stroke ~ ., data = train_reg)
+step.model <- stepAIC(all.mod, direction="both",
+                      trace = FALSE)
+sum_logit <- summary(step.model)
+colnames(sum_logit$coefficients)<-c("est", "std", "T", "Pr")
+
+row.names(as.data.frame(sum_logit$coefficients) %>% filter(Pr<=0.05))
+                                    
+
+```
+
+
+### Train logistic regression
+
+6. Use the significant variables from step 5 to train a logistic regression, report the significant variables and the ROC on testing data set.
+
+```{r message = FALSE}
+
+
+model <- glm(stroke ~ age + hypertension + heart_disease + ever_married + 
+              work_type  + avg_glucose_level , 
+            data = train_reg, 
+            family = binomial)
+model
+
+
+predicted_probabilities <- predict(model, newdata = test_reg, type = "response")
+
+roc_feature <- roc(test_reg$stroke, predicted_probabilities)
+auc_value <- auc(roc_feature)
+
+
+auc_value
+
+```
+
+
+The logistic regression model reveals insightful associations between various predictors and the likelihood of experiencing a stroke. 
+As age increases by one unit, the log-odds of having a stroke rise by 0.0716. 
+Individuals with hypertension or heart disease exhibit higher log-odds of having a stroke, emphasizing the impact of these health conditions. 
+Surprisingly, being ever married is linked to a decrease in the log-odds of having a stroke, suggesting a potential protective factor associated with marital status. 
+Occupational factors also play a role, as individuals in government jobs have lower log-odds of experiencing a stroke compared to those in other work types.
+Individuals who have never worked or are employed in the private or self-employed sectors show lower log-odds of having a stroke. 
+The average glucose level further contributes to the model, with each one-unit increase associated with a 0.0043 increase in the log-odds of having a stroke. 
+The model's overall performance is reflected in its Area Under the Curve (AUC) of 0.8704, indicating a robust ability to distinguish between positive and negative stroke cases. 
+
+In summary, the model provides valuable insights into the factors influencing stroke occurrence, highlighting the significance of age, health conditions, marital status, occupation, and average glucose level in predicting stroke outcomes.
+
+
+
+
+
+
+
+
+
+
+### Comparison
+
+
+7. Compare the ROC between the first model with manually picked variables against the second model with feature selection. Which one does better? Why do you think that's the case?
+```{r message = FALSE}
+
+
+plot(roc_age, col = "blue", lwd = 2, main = "ROC Comparison")
+lines(roc_gluc, col = "red", lwd = 2)
+lines(roc_feature, col = "green", lwd = 2)
+legend("bottomright", legend = c("Manual Model (Age)", "Manual Model (Glucose)", "Feature Selection Model"), 
+       col = c("blue", "red", "green"), lwd = 2)
+
+
+```
+
+In assessing stroke prediction models, the ROC plot visually shows how well they perform. The gray diagonal line in the ROC plot represents the expected performance of a random classifier. If a model's ROC curve closely follows or overlaps with this line, it suggests the model isn't significantly better than random chance. Regarding feature selection, the ROC curve for this model aligns closely with the diagonal line, suggesting difficulties in making meaningful distinctions based on those features.
+
+On the other hand, ROC curves consistently above the diagonal line indicate models that perform better than random chance. The top-left corner of the plot is the ideal scenario, where the true positive rate is high, and the false positive rate is low. The aim for ROC curves is higher on the plot, indicating better discriminatory power.
+
+Ultimately, evaluating the positions of ROC curves and their proximity to the top-left corner is crucial for assessing a models' predictive performance in stroke prediction. This analysis offers valuable insights into model effectiveness and helps make informed decisions about their real-world application.
+
+
+
+
+
+
